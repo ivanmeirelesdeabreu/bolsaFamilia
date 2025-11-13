@@ -290,10 +290,6 @@ public class TelaPrincipal extends JFrame {
         }
     }
 
-
-    public JPanel getPainelCentral() {
-        return painelCentral;
-    }
     //
     //
 
