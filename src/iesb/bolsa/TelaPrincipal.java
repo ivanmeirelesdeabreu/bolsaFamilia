@@ -264,7 +264,7 @@ public class TelaPrincipal extends JFrame {
     //
     //
     private void itGrfTop1ActionPerformed() {
-        CriarGraficoService service = new CriarGraficoService(this, 1);
+        CriarGraficoService service = new CriarGraficoService(1, painelCentral);
         if (service.execute()) {
             mostrarMensagem("Gráfico de Pizza criado com sucesso!");
         } else {
@@ -273,7 +273,7 @@ public class TelaPrincipal extends JFrame {
     }
 
     private void itGrfTop2ActionPerformed() {
-        CriarGraficoService service = new CriarGraficoService(this, 2);
+        CriarGraficoService service = new CriarGraficoService(2, painelCentral);
         if (service.execute()) {
             mostrarMensagem("Gráfico de Barras criado com sucesso!");
         } else {
@@ -282,13 +282,14 @@ public class TelaPrincipal extends JFrame {
     }
 
     private void itGrfTop3ActionPerformed() {
-        CriarGraficoService service = new CriarGraficoService(this, 3);
+        CriarGraficoService service = new CriarGraficoService(3, painelCentral);
         if (service.execute()) {
             mostrarMensagem("Gráfico de Linhas criado com sucesso!");
         } else {
             mostrarErro(service.getErr().getMessage());
         }
     }
+
 
     public JPanel getPainelCentral() {
         return painelCentral;

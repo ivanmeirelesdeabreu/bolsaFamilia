@@ -1,183 +1,113 @@
 package iesb.bolsa.service.impl;
 
-import iesb.bolsa.TelaPrincipal;
 import iesb.bolsa.exceptions.MeuErroException;
-import iesb.bolsa.manager.ManagerConexao;
-import org.jfree.chart.ChartFactory;
-import org.jfree.chart.ChartPanel;
-import org.jfree.chart.ChartUtils;
-import org.jfree.chart.JFreeChart;
+import iesb.bolsa.manager.ManagerGrafico;
+import iesb.bolsa.service.Service;
+import org.jfree.chart.*;
+import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.data.category.DefaultCategoryDataset;
 import org.jfree.data.general.DefaultPieDataset;
+import org.jfree.chart.axis.NumberAxis;
 
 import javax.swing.*;
 import java.awt.*;
-import java.io.File;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.text.DecimalFormat;
 
-public class CriarGraficoService implements iesb.bolsa.service.Service {
+public class CriarGraficoService implements Service {
 
     private MeuErroException err;
-    private TelaPrincipal telaPrincipal;
     private int tipoGrafico; // 1=pizza, 2=barras, 3=linhas
+    private JPanel painel;
 
-    public CriarGraficoService(TelaPrincipal telaPrincipal, int tipoGrafico) {
-        this.telaPrincipal = telaPrincipal;
+    public CriarGraficoService(int tipoGrafico, JPanel painel) {
         this.tipoGrafico = tipoGrafico;
+        this.painel = painel;
     }
 
     @Override
     public boolean execute() {
-        Connection conn = null;
-        PreparedStatement ps = null;
-        ResultSet rs = null;
-
         try {
-            ManagerConexao manager = new ManagerConexao();
-            manager.abrirConexao(true);
-            conn = manager.getConexao();
-            //conn = manager.abrirConexao(true);
-
-            String sql = "SELECT uf, valTotal FROM sintetico ORDER BY valTotal DESC LIMIT 5";
-            ps = conn.prepareStatement(sql);
-            rs = ps.executeQuery();
-
-            Map<String, Double> dados = new LinkedHashMap<>();
-            while (rs.next()) {
-                dados.put(rs.getString("uf"), rs.getDouble("valTotal"));
-            }
-
-            if (dados.isEmpty()) {
-                throw new MeuErroException("Nenhum dado encontrado na tabela sintetico.");
-            }
+            ManagerGrafico manager = new ManagerGrafico();
+            manager.carregarTop5Valores();
 
             JFreeChart chart = null;
-            switch (tipoGrafico) {
-                case 1:
-                    chart = criarGraficoPizza(dados);
-                    break;
-                case 2:
-                    chart = criarGraficoBarras(dados);
-                    break;
-                case 3:
-                    chart = criarGraficoLinhas(dados);
-                    break;
-                default:
-                    throw new MeuErroException("Tipo de gráfico inválido.");
+            if (tipoGrafico == 1) {
+                chart = criarPizza(manager.ufs, manager.valores);
+            } else if (tipoGrafico == 2) {
+                chart = criarBarras(manager.ufs, manager.valores);
+            } else {
+                chart = criarLinhas(manager.ufs, manager.valores);
             }
 
-            exibirGraficoNaTela(chart);
-            salvarGraficoComoImagem(chart, tipoGrafico);
-
+            exibirGrafico(chart);
             return true;
 
+        } catch (MeuErroException e) {
+            err = e;
+            return false;
         } catch (Exception e) {
             err = new MeuErroException("Erro ao criar gráfico: " + e.getMessage());
             return false;
-        } finally {
-            try { if (rs != null) rs.close(); } catch (Exception ignored) {}
-            try { if (ps != null) ps.close(); } catch (Exception ignored) {}
-            try { if (conn != null) conn.close(); } catch (Exception ignored) {}
         }
     }
 
-    private JFreeChart criarGraficoPizza(Map<String, Double> dados) {
+    private JFreeChart criarPizza(String[] ufs, double[] valores) {
         DefaultPieDataset dataset = new DefaultPieDataset();
-        dados.forEach(dataset::setValue);
+        for (int i = 0; i < ufs.length && ufs[i] != null; i++) {
+            dataset.setValue(ufs[i], valores[i]);
+        }
         return ChartFactory.createPieChart(
                 "Top 5 Valores Bolsa Família (Pizza)",
                 dataset,
                 true, true, false
         );
     }
-    /*
-    private JFreeChart criarGraficoBarras(Map<String, Double> dados) {
+
+    private JFreeChart criarBarras(String[] ufs, double[] valores) {
         DefaultCategoryDataset dataset = new DefaultCategoryDataset();
-        dados.forEach((uf, valor) -> dataset.addValue(valor, "Valor Total", uf));
-        return ChartFactory.createBarChart(
-                "Top 5 Valores Bolsa Família (Barras)",
-                "UF", "Valor Total (R$)",
-                dataset
-        );
-    }
-    */
-    private JFreeChart criarGraficoBarras(Map<String, Double> dados) {
-        DefaultCategoryDataset dataset = new DefaultCategoryDataset();
-        dados.forEach((uf, valor) -> dataset.addValue(valor, "Valor Total", uf));
+        for (int i = 0; i < ufs.length && ufs[i] != null; i++) {
+            dataset.addValue(valores[i], "Valor Total", ufs[i]);
+        }
 
         JFreeChart chart = ChartFactory.createBarChart(
                 "Top 5 Valores Bolsa Família (Barras)",
                 "UF", "Valor Total (R$)",
-                dataset
+                dataset, PlotOrientation.VERTICAL, false, true, false
         );
 
-        // >>> Adiciona formatação de números no eixo Y <<<
         var plot = chart.getCategoryPlot();
-        var eixoY = (org.jfree.chart.axis.NumberAxis) plot.getRangeAxis();
-        eixoY.setNumberFormatOverride(new java.text.DecimalFormat("#,##0.00"));
+        var eixoY = (NumberAxis) plot.getRangeAxis();
+        eixoY.setNumberFormatOverride(new DecimalFormat("R$ #,##0.00"));
 
         return chart;
     }
 
-
-    /*
-    private JFreeChart criarGraficoLinhas(Map<String, Double> dados) {
+    private JFreeChart criarLinhas(String[] ufs, double[] valores) {
         DefaultCategoryDataset dataset = new DefaultCategoryDataset();
-        dados.forEach((uf, valor) -> dataset.addValue(valor, "Valor Total", uf));
-        return ChartFactory.createLineChart(
-                "Top 5 Valores Bolsa Família (Linhas)",
-                "UF", "Valor Total (R$)",
-                dataset
-        );
-    }
-    */
-    private JFreeChart criarGraficoLinhas(Map<String, Double> dados) {
-        DefaultCategoryDataset dataset = new DefaultCategoryDataset();
-        dados.forEach((uf, valor) -> dataset.addValue(valor, "Valor Total", uf));
+        for (int i = 0; i < ufs.length && ufs[i] != null; i++) {
+            dataset.addValue(valores[i], "Valor Total", ufs[i]);
+        }
 
         JFreeChart chart = ChartFactory.createLineChart(
                 "Top 5 Valores Bolsa Família (Linhas)",
                 "UF", "Valor Total (R$)",
-                dataset
+                dataset, PlotOrientation.VERTICAL, false, true, false
         );
 
-        // >>> Adiciona formatação de números no eixo Y <<<
         var plot = chart.getCategoryPlot();
-        var eixoY = (org.jfree.chart.axis.NumberAxis) plot.getRangeAxis();
-        eixoY.setNumberFormatOverride(new java.text.DecimalFormat("#,##0.00"));
+        var eixoY = (NumberAxis) plot.getRangeAxis();
+        eixoY.setNumberFormatOverride(new DecimalFormat("R$ #,##0.00"));
 
         return chart;
     }
 
-
-    private void exibirGraficoNaTela(JFreeChart chart) {
+    private void exibirGrafico(JFreeChart chart) {
+        painel.removeAll();
         ChartPanel chartPanel = new ChartPanel(chart);
         chartPanel.setPreferredSize(new Dimension(600, 400));
-
-        JPanel painelCentral = telaPrincipal.getPainelCentral();
-        painelCentral.removeAll();
-        painelCentral.add(chartPanel, BorderLayout.CENTER);
-        painelCentral.revalidate();
-        painelCentral.repaint();
-    }
-
-    private void salvarGraficoComoImagem(JFreeChart chart, int tipoGrafico) {
-        try {
-            String nome = switch (tipoGrafico) {
-                case 1 -> "grafico_pizza.png";
-                case 2 -> "grafico_barras.png";
-                case 3 -> "grafico_linhas.png";
-                default -> "grafico.png";
-            };
-            File arquivo = new File(nome);
-            ChartUtils.saveChartAsPNG(arquivo, chart, 800, 600);
-        } catch (Exception e) {
-            System.err.println("Não foi possível salvar o gráfico: " + e.getMessage());
-        }
+        painel.add(chartPanel, BorderLayout.CENTER);
+        painel.revalidate();
+        painel.repaint();
     }
 
     public MeuErroException getErr() {
